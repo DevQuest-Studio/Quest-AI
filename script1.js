@@ -89,10 +89,13 @@ function switchPersona(persona) {
     lucide.createIcons();
 }
 
-personaToggle.addEventListener('click', () => {
-    const nextPersona = currentPersona === 'cooper' ? 'codey' : 'cooper';
-    const nextMode = MODES.find(m => m.persona === nextPersona) || MODES[0];
-    selectMode(nextMode.id);
+document.addEventListener('DOMContentLoaded', () => {
+    const personaToggle = document.getElementById('persona-toggle');
+    personaToggle.addEventListener('click', () => { 
+        const nextPersona = currentPersona === 'cooper' ? 'codey' : 'cooper';
+        const nextMode = MODES.find(m => m.persona === nextPersona) || MODES[0];
+        selectMode(nextMode.id);
+    });
 });
 
 // Mode Switching Logic
