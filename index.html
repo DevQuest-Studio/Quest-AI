@@ -1,77 +1,77 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Liquid AI</title>
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="favicon.svg">
-
-    <!-- Tailwind CDN for quick styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Highlight.js for code blocks -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
-    
-    <style>
-        /* Custom Glassmorphism Panels */
-        .glass {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .glass-panel {
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(24px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        /* Blob animation */
-        .blob {
-            position: absolute;
-            filter: blur(80px);
-            z-index: -1;
-            opacity: 0.5;
-            animation: float 10s infinite alternate;
-        }
-        @keyframes float {
-            0% { transform: translate(0,0) rotate(0deg); }
-            100% { transform: translate(30px,50px) rotate(10deg); }
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
-
-        /* Code block overrides */
-        pre { background: #1f2937; padding: 1rem; margin: 0.75rem 0; border-radius: 0.5rem; overflow-x: auto; }
-        code { font-family: 'Fira Code', monospace; font-size: 0.9em; }
-
-        body { background-color: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quest AI</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.3/dist/tailwind.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js/lib/common.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide/dist/lucide.min.js"></script>
 </head>
-<body class="h-screen w-screen flex flex-col md:flex-row relative">
+<body class="h-screen w-screen flex flex-col md:flex-row relative bg-slate-900 text-white">
 
-    <!-- Animated blobs -->
-    <div class="blob blob-1 top-[-10%] left-[-10%] w-[60vw] h-[60vw] rounded-[40%_60%_70%_30%_/_40%_50%_60%_50%] bg-indigo-600"></div>
-    <div class="blob blob-2 bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] rounded-[60%_40%_30%_70%_/_50%_30%_50%_50%] bg-pink-600"></div>
+<!-- Ambient Background -->
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
 
-    <!-- App Container -->
-    <div id="app-container" class="opacity-0 transition-opacity duration-1000 w-full h-full flex relative z-10">
-        <!-- Sidebar, Chat, Modals will be dynamically populated by JS -->
-    </div>
+<!-- App Container -->
+<div id="app-container" class="opacity-100 w-full h-full flex relative z-10">
 
-    <!-- Highlight.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <!-- Sidebar -->
+    <aside id="sidebar" class="fixed md:relative w-72 h-full glass-panel z-50 transform -translate-x-full md:translate-x-0 transition-transform duration-300 flex flex-col border-r border-white/10">
+        <div class="p-6 border-b border-white/10">
+            <div id="persona-toggle" class="cursor-pointer bg-blue-500/20 border border-blue-500/50 p-4 rounded-2xl flex items-center gap-4 transition-all hover:bg-white/10 shadow-lg">
+                <div id="persona-icon" class="w-12 h-12 rounded-xl bg-gradient-to-tr from-white/20 to-white/5 flex items-center justify-center">
+                    <i data-lucide="sparkles" class="text-white w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 id="persona-label" class="font-bold text-lg text-white">Cooper</h1>
+                    <p class="text-xs text-white/50">Click to Switch Persona</p>
+                </div>
+            </div>
+        </div>
+        <div class="p-4">
+            <button id="new-chat-btn" class="w-full py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium border border-white/10 flex items-center justify-center gap-2">
+                <i data-lucide="plus" class="w-4 h-4"></i> New Chat
+            </button>
+        </div>
+        <div class="flex-1 overflow-y-auto px-4 py-2" id="chat-list"></div>
+        <div class="p-4 border-t border-white/10">
+            <button id="settings-btn" class="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 text-white/70 transition-colors">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+                <span>Settings</span>
+            </button>
+        </div>
+    </aside>
 
-    <!-- Lucide Icons -->
-    <script src="https://cdn.jsdelivr.net/npm/lucide@0.264.0/dist/lucide.min.js"></script>
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-full relative">
 
-    <!-- Your JS -->
-    <script src="script1.js"></script>
-    <script src="script2.js"></script>
+        <!-- Chat Screen -->
+        <div id="chat-screen" class="flex-1 flex flex-col h-full overflow-hidden">
+            <div id="messages-container" class="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth"></div>
+            <div class="p-4 md:p-6 pt-0">
+                <div class="glass-panel p-2 rounded-2xl flex items-end gap-2 shadow-2xl border border-white/20 relative">
+                    <div class="relative">
+                        <button id="mode-dropdown-trigger" class="p-3 text-indigo-400 hover:bg-white/5 rounded-xl transition-colors flex items-center gap-2">
+                            <div id="mode-icon"><i data-lucide="message-square" class="w-5 h-5"></i></div>
+                        </button>
+                        <div id="mode-dropdown-menu" class="absolute bottom-full mb-2 w-48 glass-panel p-2 rounded-xl origin-bottom-left transition-all duration-300 hidden opacity-0 scale-95"></div>
+                    </div>
+                    <textarea id="message-input" rows="1" class="w-full bg-transparent text-white placeholder-white/40 p-3 outline-none resize-none max-h-32" placeholder="Type a message..."></textarea>
+                    <button id="send-btn" class="p-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors">
+                        <i data-lucide="send" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
 
+    </main>
+</div>
+
+<script src="script1.js"></script>
+<script src="script2.js"></script>
 </body>
 </html>
