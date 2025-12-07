@@ -31,16 +31,17 @@ function selectLanguage(lang){
 }
 
 // Listeners
-customLanguageDisplay.addEventListener('click', e => {
-    e.stopPropagation();
-    toggleLanguageDropdown();
-});
-document.addEventListener('click', e => {
-    if(isLanguageDropdownOpen && !customLanguageDisplay.contains(e.target) && !customLanguageMenu.contains(e.target)){
-        toggleLanguageDropdown(false);
-    }
-});
 document.addEventListener('DOMContentLoaded', () => {
+    customLanguageDisplay.addEventListener('click', e => {
+        e.stopPropagation();
+        toggleLanguageDropdown();
+    });
+    document.addEventListener('click', e => {
+        if(isLanguageDropdownOpen && !customLanguageDisplay.contains(e.target) && !customLanguageMenu.contains(e.target)){
+            toggleLanguageDropdown(false);
+        }
+    });
+
     modeDropdownTrigger.addEventListener('click', e => {
         e.stopPropagation();
         toggleDropdown();
