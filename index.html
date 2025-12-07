@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cooper & Codey - Liquid AI</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Highlight.js for Code Coloring -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    
+    <!-- Marked for Markdown Parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, setDoc, getDoc, updateDoc, query, onSnapshot, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Configuration ---
+        const userConfig = {
+            apiKey: "AIzaSyAED0FvAfWyLQNaapLNqc4CN9BQPBeq8vU",
+            authDomain: "kristoauth-1d71b.firebaseapp.com",
+            projectId: "kristoauth-1d71b",
+            storageBucket: "kristoauth-1d71b.firebasestorage.app",
+            messagingSenderId: "1097863662117",
+            appId: "1:1097863662117:web:496933d764c87d30f08dcc",
+            measurementId: "G-ZXQ7FXX790"
+        };
+
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userConfig;
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'cooper-codey-ai';
+        const apiKey = "AIzaSyCVKqhGunw73jAF44Q4DA6ks3C5xZTG5PA"; // For gemini
+
+        // --- AI Mode Configuration ---
+        const MODES = [
+            { id: 'text', label: 'Message', icon: 'message-square', persona: 'cooper', color: 'indigo' },
+            { id: 'image', label: 'Image', icon: 'image', persona: 'cooper', color: 'pink' },
+            { id: 'video', label: 'Video Idea', icon: 'video', persona: 'cooper', color: 'orange' },
+            { id: 'code', label: 'Code', icon: 'terminal', persona: 'codey', color: 'green' }
+        ];
+
+        // --- Firebase Init ---
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // --- State Management ---
+        let currentUser = null;
+        let currentChatId = null;
+        let currentPersona = 'cooper'; 
+        let currentMode = MODES[0]; // Start with 'text'
+        let userPreferences = {
+            language: 'English',
+            aboutUser: ''
+        };
+        let currentLoaderElement = null; 
+        const languages = [
+            'English', 'Français', 'Español', 'Deutsch', 'Русский', 'Українська', 'Português', 'Italiano', '日本語', '中文'
+        ];
+        let renameTargetId = null;
+
+        // --- DOM Elements ---
+        const appContainer = document.getElementById('app-container');
+        const chatListEl = document.getElementById('chat-list');
+        const messagesContainer = document.getElementById('messages-container');
+        const messageInput = document.getElementById('message-input');
+        const sendBtn = document.getElementById('send-btn');
+        const newChatBtn = document.getElementById('new-chat-btn');
+        const settingsBtn = document.getElementById('settings-btn');
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        const sidebar = document.getElementById('sidebar');
+        const settingsModal = document.getElementById('settings-modal');
+        const closeModalBtn = document.getElementById('close-modal');
+        const cancelSettingsBtn = document.getElementById('cancel-settings'); 
+        const saveSettingsBtn = document.getElementById('save-settings');
+        const aboutUserInput = document.getElementById('about-user-input');
+        const previewModal = document.getElementById('preview-modal');
+        const closePreviewBtn = document.getElementById('close-preview');
+        const previewFrame = document.getElementById('preview-frame');
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const chatScreen = document.getElementById('chat-screen');
+        const personaToggle = document.getElementById('persona-toggle');
+        const personaLabel = document.getElementById('persona-label');
+        const personaIcon = document.getElementById('persona-icon');
+        const blob1 = document.querySelector('.blob-1');
+        const blob2 = document.querySelector('.blob-2');
+        
+        // Mode Dropdown Elements
+        const modeDropdownTrigger = document.getElementById('mode-dropdown-trigger');
+        const modeDropdownMenu = document.getElementById('mode-dropdown-menu');
+        const modeIcon = document.getElementById('mode-icon');
+        let isDropdownOpen = false;
+
+        // Chat Title Elements
+        const chatTitleContainer = document.getElementById('chat-title-container');
+        const chatTitleDisplay = document.getElementById('chat-title-display');
+        const editTitleBtn = document.getElementById('edit-title-btn');
+        const chatTitleInput = document.getElementById('chat-title-input');
+        const saveTitleBtn = document.getElementById('save-title-btn');
+        
+        // Custom Language Dropdown Elements
+        const customLanguageDisplay = document.getElementById('custom-language-display');
+        const selectedLanguageText = document.getElementById('selected-language-text');
+        const customLanguageMenu = document.getElementById('custom-language-menu');
+        let isLanguageDropdownOpen = false;
+
+        // Rename Chat Modal Elements
+        const renameModal = document.getElementById('rename-modal');
+        const renameInput = document.getElementById('rename-input');
+        const cancelRenameBtn = document.getElementById('cancel-rename');
+        const saveRenameBtn = document.getElementById('save-rename');
+
+
+        // --- Auth & Startup ---
+        async function initAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Auth Error:", error);
+                appendSystemMessage(`Error connecting to database: ${error.message}`);
+                
+                if (error.code === 'auth/custom-token-mismatch') {
+                    console.warn("Token mismatch detected. Attempting anonymous sign-in...");
+                    try {
+                        await signInAnonymously(auth);
+                    } catch (innerError) {
+                         console.error("Anonymous fallback failed:", innerError);
+                    }
+                }
+            }
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                loadUserPreferences();
+                setupChatListener();
+                switchPersona('cooper'); // Initialize persona
+                updateModeUI(); // Initialize mode UI
+                populateLanguageDropdown(); // Initialize custom language dropdown
+                appContainer.classList.remove('opacity-0');
+            }
+        });
+
+        // --- Firestore Logic ---
+        async function loadUserPreferences() {
+            if (!currentUser) return;
+            const prefsRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'settings', 'general');
+            try {
+                const docSnap = await getDoc(prefsRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    userPreferences.language = data.language || 'English';
+                    userPreferences.aboutUser = data.aboutUser || '';
+                } else {
+                    await setDoc(prefsRef, userPreferences);
+                }
+                updateSettingsUI();
+            } catch (e) {
+                console.error("Error loading prefs:", e);
+            }
+        }
+
+        async function saveUserPreferences() {
+            if (!currentUser) return;
+            const newLang = selectedLanguageText.textContent; // Get value from custom dropdown
+            const newAbout = aboutUserInput.value;
+            userPreferences = { language: newLang, aboutUser: newAbout };
+            const prefsRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'settings', 'general');
+            await setDoc(prefsRef, userPreferences);
+            toggleModal(settingsModal, false);
+        }
+        
+        async function renameChat(chatId, newTitle) {
+            if (!chatId || !newTitle.trim()) return;
+            const chatRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'chats', chatId);
+            await updateDoc(chatRef, { title: newTitle.trim() });
+            toggleModal(renameModal, false);
+        }
+
+        function setupChatListener() {
+            const chatsRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'chats');
+            const q = query(chatsRef); 
+
+            onSnapshot(q, (snapshot) => {
+                chatListEl.innerHTML = '';
+                const chats = [];
+                snapshot.forEach(doc => {
+                    chats.push({ id: doc.id, ...doc.data() });
+                });
+                chats.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+                if (chats.length === 0) {
+                    chatListEl.innerHTML = `<div class="text-white/50 text-sm text-center mt-4 italic">No chats yet</div>`;
+                }
+
+                chats.forEach(chat => {
+                    const li = document.createElement('div');
+                    li.className = `p-3 mb-2 rounded-xl cursor-pointer transition-all duration-200 group flex justify-between items-center ${currentChatId === chat.id ? 'bg-white/20 shadow-lg border border-white/20' : 'hover:bg-white/10 text-white/70'}`;
+                    
+                    // Container for Title and Edit button
+                    const titleContainer = document.createElement('div');
+                    titleContainer.className = "flex items-center gap-2 flex-1 truncate";
+
+                    const titleSpan = document.createElement('span');
+                    titleSpan.className = "truncate font-medium text-sm flex-1";
+                    titleSpan.textContent = chat.title || "New Conversation";
+                    titleContainer.appendChild(titleSpan);
+
+                    // New: Edit button for sidebar rename
+                    const editBtn = document.createElement('button');
+                    editBtn.innerHTML = '<i data-lucide="edit-2" class="w-3.5 h-3.5 text-white/50 hover:text-white"></i>';
+                    editBtn.className = "p-1 opacity-0 group-hover:opacity-100 transition-opacity";
+                    editBtn.setAttribute('aria-label', 'Rename chat');
+                    editBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        openRenameModal(chat.id, chat.title || "New Conversation");
+                    };
+                    titleContainer.appendChild(editBtn);
+                    
+                    // Delete Button (moved to the end of the item)
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4 text-red-300 hover:text-red-100"></i>';
+                    deleteBtn.className = "opacity-0 group-hover:opacity-100 transition-opacity p-1 ml-2";
+                    deleteBtn.setAttribute('aria-label', 'Delete chat');
+                    deleteBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteChat(chat.id);
+                    };
+
+                    li.onclick = () => loadChat(chat.id);
+                    li.appendChild(titleContainer); // Append the container with title and edit button
+                    li.appendChild(deleteBtn);
+                    chatListEl.appendChild(li);
+                });
+                lucide.createIcons();
+            });
+        }
+
+        async function createNewChat() {
+            if (!currentUser) return;
+            const chatsRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'chats');
+            const newChat = await addDoc(chatsRef, {
+                title: "New Conversation",
+                createdAt: serverTimestamp()
+            });
+            loadChat(newChat.id);
+            if (window.innerWidth < 768) toggleSidebar(false);
+        }
+
+        async function deleteChat(chatId) {
+            if (!window.confirm("Delete this chat?")) return; 
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'chats', chatId));
+            if (currentChatId === chatId) {
+                currentChatId = null;
+                showWelcome();
+            }
+        }
+
+        let unsubscribeMessages = null;
+
+        function loadChat(chatId) {
+            currentChatId = chatId;
+            showChatScreen();
+            toggleTitleEdit(false); // Hide input field on load
+            
+            // 1. Fetch current chat title once to display immediately
+            const chatRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'chats', chatId);
+            getDoc(chatRef).then(docSnap => {
+                if (docSnap.exists()) {
+                    const title = docSnap.data().title || "New Conversation";
+                    chatTitleDisplay.textContent = title;
+                    chatTitleInput.value = title;
+                    chatTitleContainer.classList.remove('hidden'); // Show title UI
+                }
+            }).catch(e => console.error("Error fetching chat title:", e));
+
+            if (unsubscribeMessages) unsubscribeMessages();
+
+            const msgsRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'chats', chatId, 'messages');
+            const q = query(msgsRef); 
+
+            unsubscribeMessages = onSnapshot(q, (snapshot) => {
+                const msgs = [];
+                snapshot.forEach(doc => msgs.push(doc.data()));
+                msgs.sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
+
+                let loaderIsActive = false;
+                if (currentLoaderElement && messagesContainer.contains(currentLoaderElement)) {
+                    currentLoaderElement.remove();
+                    loaderIsActive = true;
+                }
+
+                messagesContainer.innerHTML = ''; 
+                
+                // Add the title container back before messages
+                messagesContainer.appendChild(chatTitleContainer);
+
+                if (msgs.length === 0) {
+                    appendSystemMessage(currentPersona === 'cooper' ? "Cooper is listening..." : "Codey is ready to compile.");
+                }
+
+                msgs.forEach(msg => {
+                    appendMessageUI(msg.role, msg.text, msg.type, msg.userMode);
+                });
+                
+                if (loaderIsActive) {
+                    messagesContainer.appendChild(currentLoaderElement);
+                }
+
+                scrollToBottom();
+            });
+        }
+        
+        // --- Chat Title Editing Logic (Main Screen) ---
+        function toggleTitleEdit(editing) {
+            if (editing) {
+                chatTitleDisplay.classList.add('hidden');
+                editTitleBtn.classList.add('hidden');
+                chatTitleInput.classList.remove('hidden');
+                saveTitleBtn.classList.remove('hidden');
+                chatTitleInput.focus();
+                chatTitleInput.select();
+            } else {
+                chatTitleDisplay.classList.remove('hidden');
+                editTitleBtn.classList.remove('hidden');
+                chatTitleInput.classList.add('hidden');
+                saveTitleBtn.classList.add('hidden');
+            }
+        }
+
+        async function saveTitle() {
+            const newTitle = chatTitleInput.value.trim();
+            if (newTitle && currentChatId) {
+                const chatRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'chats', currentChatId);
+                await updateDoc(chatRef, { title: newTitle });
+                chatTitleDisplay.textContent = newTitle; // Update display immediately
+                toggleTitleEdit(false);
+            }
+        }
+
+        // --- AI Logic (Text, Image, Video, Code) ---
+        async function handleSend() {
+            const text = messageInput.value.trim();
+            if (!text || !currentChatId) return;
+            
+            const currentModeId = currentMode.id;
+
+            messageInput.value = '';
+            
+            // Add user message with the mode context for display in history
+            await addMessageToDB('user', text, 'text', currentModeId); 
+            
+            // Generate response based on the selected mode
+            generateResponse(text, currentModeId);
+        }
+
+        async function addMessageToDB(role, text, type = 'text', userMode = 'text') {
+            const msgsRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'chats', currentChatId, 'messages');
+            await addDoc(msgsRef, {
+                role,
+                text,
+                type, // 'text' or 'image' for content type
+                userMode, // The mode the user selected (text, image, code, video)
+                timestamp: serverTimestamp()
+            });
+        }
+
+        async function generateResponse(userText, mode) {
+            currentLoaderElement = appendLoaderUI();
+            scrollToBottom();
+
+            const MAX_RETRIES = 3;
+            for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+                try {
+                    let aiResponseText = "";
+                    let responseType = "text";
+                    let url, payload;
+    
+                    if (mode === 'image') {
+                        // --- Image Generation ---
+                        const imagePrompt = userText;
+                        url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`;
+                        payload = {
+                            instances: [{ prompt: imagePrompt }],
+                            parameters: { sampleCount: 1 }
+                        };
+                        
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        
+                        const data = await response.json();
+                        if (data.predictions && data.predictions[0]) {
+                            const base64Image = data.predictions[0].bytesBase64Encoded;
+                            aiResponseText = `data:image/png;base64,${base64Image}`;
+                            responseType = "image";
+                        } else {
+                            aiResponseText = "Sorry, I couldn't generate that image. Please try a different description.";
+                        }
+    
+                    } else {
+                        // --- Text/Code/Video Generation ---
+                        const historyElements = Array.from(messagesContainer.querySelectorAll('.msg-text'));
+                        const actualHistory = historyElements.filter(el => !el.closest('.loading-dots-container'));
+
+                        const historyContext = actualHistory.slice(-6).map(el => ({ 
+                            role: el.getAttribute('data-role'), 
+                            text: el.innerText 
+                        }));
+                        
+                        let systemPrompt = "";
+                        
+                        // Set System Prompt based on the persona used for the request
+                        if (mode === 'code') {
+                            systemPrompt = `
+                                You are Codey, a specialized Coding AI assistant. You are technical, precise, and efficient. You love clean code.
+                                ALWAYS output code inside markdown code blocks (e.g., \`\`\`html or \`\`\`javascript).
+                                If writing HTML, ensure it is self-contained for the preview frame.
+                                User Language: ${userPreferences.language}.
+                                User Info: ${userPreferences.aboutUser}.
+                            `;
+                        } else if (mode === 'video') {
+                            systemPrompt = `
+                                You are Cooper, a creative AI in 'Video Idea' mode.
+                                Generate a detailed video concept, storyboard, or script outline based on the user's prompt. Be imaginative and detailed.
+                                User Language: ${userPreferences.language}.
+                                User Info: ${userPreferences.aboutUser}.
+                            `;
+                        } else { // text or image prompt that resulted in text (fallback)
+                            systemPrompt = `
+                                You are Cooper, a highly advanced, creative, and friendly "Liquid Glass" AI.
+                                Your personality is warm, fluid, and helpful.
+                                User Language: ${userPreferences.language}.
+                                User Info: ${userPreferences.aboutUser}.
+                            `;
+                        }
+    
+                        url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                        
+                        const contents = historyContext.map(msg => ({ 
+                            role: msg.role === 'user' ? 'user' : 'model', 
+                            parts: [{ text: msg.text }] 
+                        }));
+                        
+                        // Add current user prompt
+                        contents.push({ role: 'user', parts: [{ text: userText }] });
+
+                        payload = {
+                            contents: contents,
+                            systemInstruction: { parts: [{ text: systemPrompt }] }
+                        };
+
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+    
+                        const data = await response.json();
+                        aiResponseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "System malfunction. The AI model did not return a valid response.";
+                    }
+    
+                    chatLoader(false);
+                    await addMessageToDB('model', aiResponseText, responseType);
+                    return; 
+    
+                } catch (err) {
+                    console.error(`Attempt ${attempt + 1} failed:`, err);
+                    if (attempt < MAX_RETRIES - 1) {
+                        const delay = Math.pow(2, attempt) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    } else {
+                        chatLoader(false);
+                        appendSystemMessage("Connection interrupted. Please try again later.");
+                    }
+                }
+            }
+        }
+
+        // --- UI Functions ---
+        
+        function chatLoader(show) {
+            if (!show && currentLoaderElement) {
+                currentLoaderElement.remove();
+                currentLoaderElement = null;
+            }
+        }
+
+        function appendLoaderUI() {
+            const div = document.createElement('div');
+            div.className = "flex w-full mb-6 justify-start loading-dots-container";
+            
+            const bubble = document.createElement('div');
+            bubble.className = "max-w-[85%] md:max-w-[75%] rounded-2xl p-4 shadow-sm backdrop-blur-md border border-white/10 bg-white/10 rounded-bl-none";
+
+            // Jumping dots HTML structure (fixed class names)
+            bubble.innerHTML = `
+                <div class="flex items-center space-x-1 p-1">
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                </div>
+            `;
+            
+            div.appendChild(bubble);
+            messagesContainer.appendChild(div);
+            return div;
+        }
+
+        function appendMessageUI(role, content, type, userMode) {
+            const div = document.createElement('div');
+            div.className = `flex w-full mb-6 ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+            
+            const bubble = document.createElement('div');
+            
+            const bubbleClasses = role === 'user' 
+                ? 'bg-gradient-to-br from-indigo-500/80 to-purple-500/80 text-white rounded-br-none' 
+                : 'bg-gray-800/80 text-gray-100 rounded-bl-none border border-white/10';
+
+            bubble.className = `max-w-[85%] md:max-w-[75%] rounded-2xl p-4 shadow-xl backdrop-blur-md ${bubbleClasses}`;
+
+            if (type === 'image') {
+                // ... Image Display
+                const modeDetails = MODES.find(m => m.id === userMode) || MODES[1];
+                const modeColor = modeDetails.color;
+                
+                if (content.startsWith('data:image')) {
+                    bubble.innerHTML = `
+                        <div class="mb-3 text-xs opacity-80 font-semibold uppercase tracking-wider text-${modeColor}-300 flex items-center gap-2">
+                           <i data-lucide="${modeDetails.icon}" class="w-3 h-3"></i> ${modeDetails.label} Output
+                        </div>
+                        <img src="${content}" alt="AI Generated Image" class="rounded-lg w-full h-auto shadow-lg border border-white/20">
+                        <a href="${content}" download="generated-image.png" class="mt-2 inline-flex items-center gap-1 text-xs text-blue-300 hover:text-white"><i data-lucide="download" class="w-3 h-3"></i> Download</a>
+                    `;
+                } else {
+                     bubble.innerHTML = `<p class="text-red-300">${content}</p>`;
+                }
+            } else {
+                // Text/Code/Video Output
+                const rawHtml = marked.parse(content);
+                let htmlContent = `<div class="prose prose-invert prose-sm max-w-none msg-text leading-relaxed" data-role="${role}">${rawHtml}</div>`;
+                
+                // Add mode label for user messages if needed for context
+                if (role === 'user') {
+                    const modeDetails = MODES.find(m => m.id === userMode) || MODES[0];
+                    const modeColor = modeDetails.color;
+                    
+                    htmlContent = `
+                        <div class="mb-1 text-xs opacity-70 font-semibold uppercase tracking-wider text-${modeColor}-200 flex items-center gap-2">
+                            <i data-lucide="${modeDetails.icon}" class="w-3 h-3"></i> ${modeDetails.label} Prompt
+                        </div>
+                        ${htmlContent}
+                    `;
+                }
+
+                bubble.innerHTML = htmlContent;
+
+                // Code highlighting & Preview
+                const codeBlocks = bubble.querySelectorAll('pre code');
+                codeBlocks.forEach((block) => {
+                    hljs.highlightElement(block);
+                    
+                    if (block.classList.contains('language-html') || block.classList.contains('language-xml') || block.classList.contains('language-svg')) {
+                        const parentPre = block.parentElement;
+                        const btn = document.createElement('button');
+                        btn.className = "mt-2 flex items-center gap-2 px-3 py-1.5 bg-green-500/20 hover:bg-green-500/40 text-green-300 text-xs font-bold uppercase rounded transition-colors border border-green-500/30 shadow-md";
+                        btn.innerHTML = '<i data-lucide="monitor" class="w-3 h-3"></i> Preview Output';
+                        btn.onclick = () => openPreview(block.textContent);
+                        parentPre.after(btn);
+                    }
+                });
+            }
+
+            div.appendChild(bubble);
+            messagesContainer.appendChild(div);
+            lucide.createIcons();
+        }
+
+        function appendSystemMessage(text) {
+            const div = document.createElement('div');
+            div.className = "flex justify-center mb-4";
+            div.innerHTML = `<span class="text-xs text-white/40 bg-white/5 px-2 py-1 rounded-full border border-white/5 flex items-center gap-2"><i data-lucide="info" class="w-3 h-3"></i> ${text}</span>`;
+            messagesContainer.appendChild(div);
+            lucide.createIcons();
+        }
+
+        // --- Persona Switching ---
+        function switchPersona(persona) {
+            currentPersona = persona;
+            
+            if (persona === 'cooper') {
+                personaLabel.textContent = "Cooper (AI)";
+                personaIcon.innerHTML = '<i data-lucide="sparkles" class="text-white w-6 h-6"></i>';
+                blob1.style.background = '#4f46e5'; 
+                blob2.style.background = '#db2777'; 
+                
+                personaToggle.classList.remove('bg-green-500/20', 'border-green-500/50');
+                personaToggle.classList.add('bg-blue-500/20', 'border-blue-500/50');
+            } else {
+                personaLabel.textContent = "Codey (Dev)";
+                personaIcon.innerHTML = '<i data-lucide="terminal" class="text-white w-6 h-6"></i>';
+                blob1.style.background = '#059669'; 
+                blob2.style.background = '#0891b2'; 
+                
+                personaToggle.classList.remove('bg-blue-500/20', 'border-blue-500/50');
+                personaToggle.classList.add('bg-green-500/20', 'border-green-500/50');
+            }
+            lucide.createIcons();
+        }
+
+        personaToggle.addEventListener('click', () => {
+            const nextPersona = currentPersona === 'cooper' ? 'codey' : 'cooper';
+            const nextMode = MODES.find(m => m.persona === nextPersona) || MODES[0];
+            selectMode(nextMode.id);
+        });
+        
+        // --- Mode Switching Logic (Top Input Dropdown) ---
+        function toggleDropdown(show) {
+            isDropdownOpen = show !== undefined ? show : !isDropdownOpen;
+            modeDropdownMenu.classList.toggle('hidden', !isDropdownOpen);
+            if (isDropdownOpen) {
+                modeDropdownMenu.classList.remove('opacity-0', 'scale-95');
+                modeDropdownMenu.classList.add('opacity-100', 'scale-100');
+            } else {
+                modeDropdownMenu.classList.remove('opacity-100', 'scale-100');
+                modeDropdownMenu.classList.add('opacity-0', 'scale-95');
+            }
+        }
+        
+        function selectMode(modeId) {
+            currentMode = MODES.find(m => m.id === modeId) || MODES[0];
+            updateModeUI();
+            toggleDropdown(false);
+        }
+
+        function updateModeUI() {
+            modeIcon.innerHTML = `<i data-lucide="${currentMode.icon}" class="w-5 h-5 text-current"></i>`;
+
+            const colorClass = `text-${currentMode.color}-400`;
+            modeDropdownTrigger.className = modeDropdownTrigger.className.replace(/text-[\w-]+\s?/, 'p-3 rounded-xl transition-colors flex items-center gap-2 hover:bg-white/5 ');
+            modeDropdownTrigger.classList.add(colorClass);
+
+            if (currentMode.id === 'image') {
+                messageInput.placeholder = "Describe the image you want to generate...";
+            } else if (currentMode.id === 'code') {
+                messageInput.placeholder = "Write a prompt for Codey to generate code...";
+            } else if (currentMode.id === 'video') {
+                messageInput.placeholder = "Describe the video idea or script you need...";
+            } else {
+                messageInput.placeholder = "Type a message or prompt...";
+            }
+            
+            switchPersona(currentMode.persona); 
+            lucide.createIcons();
+        }
+        
+        function populateModeDropdown() {
+            modeDropdownMenu.innerHTML = MODES.map(mode => `
+                <button 
+                    class="mode-select-btn w-full text-left flex items-center gap-3 p-3 rounded-lg text-sm hover:bg-white/10 transition-colors"
+                    data-mode-id="${mode.id}"
+                >
+                    <i data-lucide="${mode.icon}" class="w-5 h-5 text-${mode.color}-400"></i>
+                    <span class="text-white/80">${mode.label}</span>
+                </button>
+            `).join('');
+
+            modeDropdownMenu.querySelectorAll('.mode-select-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const modeId = e.currentTarget.getAttribute('data-mode-id');
+                    selectMode(modeId);
+                });
+            });
+            lucide.createIcons();
+        }
+        
+        // --- Custom Language Dropdown Logic (Settings Modal) ---
+        function populateLanguageDropdown() {
+            customLanguageMenu.innerHTML = languages.map(lang => `
+                <button 
+                    class="lang-select-btn w-full text-left block px-3 py-2 text-white/80 hover:bg-white/10 transition-colors rounded-lg text-sm"
+                    data-lang="${lang}"
+                >
+                    ${lang}
+                </button>
+            `).join('');
+
+            customLanguageMenu.querySelectorAll('.lang-select-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    selectLanguage(e.currentTarget.getAttribute('data-lang'));
+                });
+            });
+            lucide.createIcons();
+        }
+
+        function toggleLanguageDropdown(show) {
+            isLanguageDropdownOpen = show !== undefined ? show : !isLanguageDropdownOpen;
+            customLanguageMenu.classList.toggle('hidden', !isLanguageDropdownOpen);
+            
+            const icon = customLanguageDisplay.querySelector('i[data-lucide="chevron-down"]');
+            if (icon) {
+                icon.classList.toggle('rotate-180', isLanguageDropdownOpen);
+            }
+        }
+        
+        function selectLanguage(lang) {
+            selectedLanguageText.textContent = lang;
+            toggleLanguageDropdown(false);
+        }
+
+
+        // --- Modals & Helpers ---
+        function openRenameModal(chatId, currentTitle) {
+            renameTargetId = chatId;
+            renameInput.value = currentTitle;
+            toggleModal(renameModal, true);
+        }
+        
+        function handleRenameSave() {
+            const newTitle = renameInput.value;
+            if (newTitle && renameTargetId) {
+                renameChat(renameTargetId, newTitle);
+            }
+        }
+
+        function openPreview(code) {
+            previewFrame.srcdoc = code;
+            toggleModal(previewModal, true);
+        }
+
+        function toggleModal(modal, show) {
+            if (show) {
+                modal.classList.remove('hidden');
+                setTimeout(() => modal.classList.remove('opacity-0'), 10);
+            } else {
+                modal.classList.add('opacity-0');
+                setTimeout(() => modal.classList.add('hidden'), 300);
+            }
+        }
+
+        function showWelcome() {
+            chatScreen.classList.add('hidden');
+            welcomeScreen.classList.remove('hidden');
+            messagesContainer.innerHTML = '';
+        }
+
+        function showChatScreen() {
+            welcomeScreen.classList.add('hidden');
+            chatScreen.classList.remove('hidden');
+        }
+
+        function toggleSidebar(forceState) {
+            if (forceState !== undefined) {
+                if (forceState) sidebar.classList.remove('-translate-x-full');
+                else sidebar.classList.add('-translate-x-full');
+            } else {
+                sidebar.classList.toggle('-translate-x-full');
+            }
+        }
+
+        function updateSettingsUI() {
+            selectedLanguageText.textContent = userPreferences.language;
+            aboutUserInput.value = userPreferences.aboutUser;
+        }
+
+        function scrollToBottom() {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // --- Event Listeners ---
+        sendBtn.addEventListener('click', handleSend);
+        
+        // Mode Dropdown listeners
+        modeDropdownTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleDropdown();
+        });
+        document.addEventListener('click', (e) => {
+            if (isDropdownOpen && !modeDropdownTrigger.contains(e.target) && !modeDropdownMenu.contains(e.target)) {
+                toggleDropdown(false);
+            }
+        });
+        
+        // Custom Language Dropdown listeners
+        customLanguageDisplay.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleLanguageDropdown();
+        });
+        document.addEventListener('click', (e) => {
+            if (isLanguageDropdownOpen && !customLanguageDisplay.contains(e.target) && !customLanguageMenu.contains(e.target)) {
+                toggleLanguageDropdown(false);
+            }
+        });
+
+
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+            }
+        });
+        
+        // Chat Title Listeners (Main Screen)
+        editTitleBtn.addEventListener('click', () => toggleTitleEdit(true));
+        saveTitleBtn.addEventListener('click', saveTitle);
+        chatTitleInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveTitle();
+            }
+        });
+        
+        // Rename Modal Listeners (Sidebar)
+        cancelRenameBtn.addEventListener('click', () => toggleModal(renameModal, false));
+        saveRenameBtn.addEventListener('click', handleRenameSave);
+        renameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleRenameSave();
+            }
+        });
+        
+        newChatBtn.addEventListener('click', createNewChat);
+        settingsBtn.addEventListener('click', () => { 
+            updateSettingsUI(); 
+            toggleModal(settingsModal, true); 
+        });
+
+        closeModalBtn.addEventListener('click', () => toggleModal(settingsModal, false));
+        cancelSettingsBtn.addEventListener('click', () => toggleModal(settingsModal, false)); 
+        
+        saveSettingsBtn.addEventListener('click', saveUserPreferences);
+        mobileMenuBtn.addEventListener('click', () => toggleSidebar());
+        closePreviewBtn.addEventListener('click', () => toggleModal(previewModal, false));
+        
+        initAuth();
+        lucide.createIcons();
+
+    </script>
+    
+    <style>
+        /* Base */
+        body {
+            background-color: #0f172a;
+            color: #e2e8f0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden;
+        }
+
+        /* Glassmorphism */
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        /* Animation blobs */
+        .blob {
+            position: absolute;
+            filter: blur(80px);
+            z-index: -1;
+            opacity: 0.5;
+            transition: background 1s ease;
+            animation: float 10s infinite alternate;
+        }
+        .blob-1 { top: -10%; left: -10%; width: 60vw; height: 60vw; background: #4f46e5; border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; }
+        .blob-2 { bottom: -10%; right: -10%; width: 60vw; height: 60vw; background: #db2777; border-radius: 60% 40% 30% 70% / 50% 30% 50% 50%; animation-delay: -2s; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            100% { transform: translate(30px, 50px) rotate(10deg); }
+        }
+
+        /* --- Jumping Dots Animation (New Loader) --- */
+        .dot {
+            width: 8px;
+            height: 8px;
+            background-color: #a78bfa; /* Violet 400 */
+            border-radius: 50%;
+            display: inline-block;
+            animation: jump 1.5s infinite ease-in-out; 
+        }
+
+        /* Stagger the animation */
+        .dot:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+        .dot:nth-child(3) {
+            animation-delay: 0.2s;
+        }
+
+        @keyframes jump {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-8px);
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
+
+        /* Code/Markdown Styling Overrides for Chat */
+        pre { background: #1f2937 !important; padding: 1rem !important; margin: 0.75rem 0 !important; border-radius: 0.5rem; }
+        code { font-family: 'Fira Code', monospace; font-size: 0.9em; }
+        .prose :where(h1, h2, h3, h4) { color: #e2e8f0; margin-top: 1rem; margin-bottom: 0.5rem;}
+        .prose :where(p) { margin-top: 0.5rem; margin-bottom: 0.5rem;}
+        
+        /* Utility color classes for JS dynamic injection */
+        .text-indigo-400 { color: #818cf8; }
+        .text-pink-400 { color: #f472b6; }
+        .text-orange-400 { color: #fb923c; }
+        .text-green-400 { color: #34d399; }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col md:flex-row relative">
+
+    <!-- Ambient Background -->
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+
+    <!-- App Container -->
+    <div id="app-container" class="opacity-0 transition-opacity duration-1000 w-full h-full flex relative z-10">
+
+        <!-- Sidebar -->
+        <aside id="sidebar" class="fixed md:relative w-72 h-full glass-panel z-50 transform -translate-x-full md:translate-x-0 transition-transform duration-300 flex flex-col border-r border-white/10">
+            <!-- Header & Persona Switcher -->
+            <div class="p-6 border-b border-white/10">
+                <div id="persona-toggle" class="cursor-pointer bg-blue-500/20 border border-blue-500/50 p-4 rounded-2xl flex items-center gap-4 transition-all hover:bg-white/10 shadow-lg">
+                    <div id="persona-icon" class="w-12 h-12 rounded-xl bg-gradient-to-tr from-white/20 to-white/5 flex items-center justify-center">
+                        <i data-lucide="sparkles" class="text-white w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h1 id="persona-label" class="font-bold text-lg text-white">Cooper (AI)</h1>
+                        <p class="text-xs text-white/50">Click to Switch Persona</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- New Chat -->
+            <div class="p-4">
+                <button id="new-chat-btn" class="w-full py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium border border-white/10 flex items-center justify-center gap-2 transition-all">
+                    <i data-lucide="plus" class="w-4 h-4"></i> New Chat
+                </button>
+            </div>
+
+            <!-- Chat List -->
+            <div class="flex-1 overflow-y-auto px-4 py-2" id="chat-list">
+                <!-- Chats -->
+            </div>
+
+            <!-- Footer -->
+            <div class="p-4 border-t border-white/10">
+                <button id="settings-btn" class="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 text-white/70 transition-colors">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
+                    <span>Settings</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col h-full relative">
+            
+            <!-- Mobile Header -->
+            <div class="md:hidden p-4 flex items-center justify-between glass border-b-0">
+                <button id="mobile-menu-btn" class="p-2 -ml-2 rounded-lg active:bg-white/10">
+                    <i data-lucide="menu" class="text-white"></i>
+                </button>
+                <span class="font-bold text-lg">Liquid AI</span>
+                <div class="w-8"></div>
+            </div>
+
+            <!-- Welcome Screen -->
+            <div id="welcome-screen" class="flex-1 flex flex-col items-center justify-center text-center p-8">
+                <div class="w-32 h-32 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_60px_rgba(99,102,241,0.4)] mb-8 animate-pulse">
+                    <i data-lucide="cpu" class="text-white w-14 h-14"></i>
+                </div>
+                <h2 class="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-indigo-200 mb-6">Liquid AI</h2>
+                <p class="text-white/60 max-w-lg text-lg mb-8">
+                    Your intelligent workspace. <br>
+                    Chat with <b>Cooper</b> for ideas & images. Switch to <b>Codey</b> for development.
+                </p>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-2xl">
+                    <div class="p-4 glass rounded-xl flex flex-col items-center gap-2 hover:bg-white/10 transition-colors">
+                        <i data-lucide="message-square" class="text-indigo-400"></i>
+                        <span class="text-sm font-medium">Chat</span>
+                    </div>
+                    <div class="p-4 glass rounded-xl flex flex-col items-center gap-2 hover:bg-white/10 transition-colors">
+                        <i data-lucide="image" class="text-pink-400"></i>
+                        <span class="text-sm font-medium">Generate Images</span>
+                    </div>
+                    <div class="p-4 glass rounded-xl flex flex-col items-center gap-2 hover:bg-white/10 transition-colors">
+                        <i data-lucide="code-2" class="text-emerald-400"></i>
+                        <span class="text-sm font-medium">Code</span>
+                    </div>
+                    <div class="p-4 glass rounded-xl flex flex-col items-center gap-2 hover:bg-white/10 transition-colors">
+                        <i data-lucide="video" class="text-orange-400"></i>
+                        <span class="text-sm font-medium">Video Scripts</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Screen -->
+            <div id="chat-screen" class="hidden flex-1 flex flex-col h-full overflow-hidden">
+                <div id="messages-container" class="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth">
+                    
+                    <!-- Chat Title Header (Hidden by default, shown on loadChat) -->
+                    <div id="chat-title-container" class="sticky top-0 mb-4 pt-4 pb-3 flex items-center justify-center hidden bg-slate-900/60 backdrop-blur-md z-30">
+                        <div class="flex items-center space-x-2 text-white/90">
+                            <!-- Display Mode -->
+                            <h2 id="chat-title-display" class="text-xl font-bold truncate max-w-xs md:max-w-md">New Conversation</h2>
+                            <button id="edit-title-btn" class="p-1 rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-colors" title="Edit conversation title">
+                                <i data-lucide="edit-2" class="w-4 h-4"></i>
+                            </button>
+                            
+                            <!-- Editing Mode -->
+                            <input id="chat-title-input" type="text" class="hidden text-xl font-bold bg-white/10 border border-indigo-500 rounded-lg px-2 py-1 outline-none text-white max-w-xs md:max-w-md" />
+                            <button id="save-title-btn" class="hidden px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-semibold transition-colors">
+                                <i data-lucide="check" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input Area -->
+                <div class="p-4 md:p-6 pt-0">
+                    <div class="glass-panel p-2 rounded-2xl flex items-end gap-2 shadow-2xl border border-white/20 relative">
+                        
+                        <!-- Mode Dropdown Trigger -->
+                        <div class="relative">
+                            <button id="mode-dropdown-trigger" class="p-3 text-indigo-400 hover:bg-white/5 rounded-xl transition-colors flex items-center gap-2" title="Switch Input Mode">
+                                <div id="mode-icon"><i data-lucide="message-square" class="w-5 h-5 text-current"></i></div>
+                            </button>
+                            
+                            <!-- Mode Dropdown Menu -->
+                            <div id="mode-dropdown-menu" class="absolute bottom-full mb-2 w-48 glass-panel p-2 rounded-xl origin-bottom-left transition-all duration-300 hidden opacity-0 scale-95">
+                                <!-- Menu items populated by JS -->
+                            </div>
+                        </div>
+                        
+                        <textarea id="message-input" rows="1" class="w-full bg-transparent text-white placeholder-white/40 p-3 outline-none resize-none max-h-32" placeholder="Type a message or prompt..."></textarea>
+                        
+                        <button id="send-btn" class="p-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors border border-white/10">
+                            <i data-lucide="send" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="text-center mt-2 text-xs text-white/30">
+                        AI can make mistakes. Check important info.
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div class="glass-panel w-full max-w-md rounded-2xl p-6 m-4 shadow-2xl border border-white/20">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold flex items-center gap-2">
+                    <i data-lucide="sliders" class="w-5 h-5 text-indigo-400"></i> Settings
+                </h3>
+                <button id="close-modal" class="text-white/50 hover:text-white"><i data-lucide="x"></i></button>
+            </div>
+            <div class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-white/70 mb-2">Language</label>
+                    <!-- Custom Language Dropdown -->
+                    <div class="relative">
+                        <button id="custom-language-display" class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white text-left outline-none focus:border-indigo-400 flex items-center justify-between transition-all">
+                            <span id="selected-language-text">English</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4 text-white/50 transition-transform duration-200"></i>
+                        </button>
+                        <div id="custom-language-menu" class="absolute w-full mt-1 bg-gray-800/90 backdrop-blur-md rounded-lg shadow-xl border border-white/10 max-h-48 overflow-y-auto z-50 hidden p-1">
+                            <!-- Options populated by JS -->
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-white/70 mb-2">Memory (About You)</label>
+                    <textarea id="about-user-input" rows="4" class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-indigo-400 resize-none text-sm" placeholder="Cooper & Codey will remember this..."></textarea>
+                </div>
+            </div>
+            <div class="mt-8 flex justify-end gap-3">
+                <button id="cancel-settings" class="px-4 py-2 rounded-lg hover:bg-white/10 text-sm">Cancel</button>
+                <button id="save-settings" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium shadow-lg shadow-indigo-500/20 text-sm">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div id="preview-modal" class="fixed inset-0 z-[160] flex items-center justify-center bg-black/80 backdrop-blur-md hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-lg w-[95vw] h-[90vh] flex flex-col overflow-hidden shadow-2xl relative">
+            <div class="bg-gray-100 border-b border-gray-200 p-3 flex justify-between items-center text-gray-800">
+                <span class="font-bold text-sm flex items-center gap-2"><i data-lucide="monitor" class="w-4 h-4 text-green-600"></i> Live Preview</span>
+                <button id="close-preview" class="p-1 hover:bg-gray-200 rounded text-gray-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <iframe id="preview-frame" class="flex-1 w-full h-full bg-white" sandbox="allow-scripts"></iframe>
+        </div>
+    </div>
+
+    <!-- Rename Chat Modal (New) -->
+    <div id="rename-modal" class="fixed inset-0 z-[170] flex items-center justify-center bg-black/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div class="glass-panel w-full max-w-xs rounded-xl p-5 m-4 shadow-2xl border border-white/20">
+            <h4 class="text-lg font-bold mb-4 text-white">Rename Chat</h4>
+            <input id="rename-input" type="text" class="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-indigo-400 mb-4" placeholder="New title" />
+            <div class="flex justify-end gap-3">
+                <button id="cancel-rename" class="px-3 py-1 rounded-lg hover:bg-white/10 text-white/70 text-sm transition-colors">Cancel</button>
+                <button id="save-rename" class="px-4 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium shadow-lg shadow-indigo-500/20 text-sm transition-colors">Save</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
