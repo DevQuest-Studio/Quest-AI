@@ -40,13 +40,14 @@ document.addEventListener('click', e => {
         toggleLanguageDropdown(false);
     }
 });
-
-modeDropdownTrigger.addEventListener('click', e => {
-    e.stopPropagation();
-    toggleDropdown();
-});
-document.addEventListener('click', e => {
-    if(isDropdownOpen && !modeDropdownTrigger.contains(e.target) && !modeDropdownMenu.contains(e.target)){
-        toggleDropdown(false);
-    }
+document.addEventListener('DOMContentLoaded', () => {
+    modeDropdownTrigger.addEventListener('click', e => {
+        e.stopPropagation();
+        toggleDropdown();
+    });
+    document.addEventListener('click', e => {
+        if(isDropdownOpen && !modeDropdownTrigger.contains(e.target) && !modeDropdownMenu.contains(e.target)){
+            toggleDropdown(false);
+        }
+    });
 });
