@@ -89,21 +89,11 @@ function switchPersona(persona) {
     lucide.createIcons();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    const personaToggle = document.getElementById('persona-toggle');
-    const personaLabel = document.getElementById('persona-label');
-    const personaIcon = document.getElementById('persona-icon');
-
-    // Example of attaching your event listener safely
-    personaToggle.addEventListener('click', () => {
-        const nextPersona = currentPersona === 'cooper' ? 'codey' : 'cooper';
-        const nextMode = MODES.find(m => m.persona === nextPersona) || MODES[0];
-        selectMode(nextMode.id);
-    });
-
-    // ...rest of your script1.js code that uses DOM elements
+personaToggle.addEventListener('click', () => {
+    const nextPersona = currentPersona === 'cooper' ? 'codey' : 'cooper';
+    const nextMode = MODES.find(m => m.persona === nextPersona) || MODES[0];
+    selectMode(nextMode.id);
 });
-
 
 // Mode Switching Logic
 function toggleDropdown(show) {
